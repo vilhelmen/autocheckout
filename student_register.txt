@@ -1,0 +1,8 @@
+# Comments (make sure # is at the very beginning of the line!)
+# Format is: repo_rel_path,student_id
+# repo_rel_path is the relative path to a student's git repo
+#  ex: abs path is git@github.com:vilhelmen/autocheckout.git
+#      rel_path is vilhelmen/autocheckout.git
+# student_id is the student's id string (which the submodule will be named)
+# Comma seperated
+vilhelmen/autocheckout.git,vilhelmen
