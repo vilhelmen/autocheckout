@@ -35,11 +35,11 @@ echo "STUDENT,${TAG}_STATUS,COMMIT" > ${LOCATE_LOG}
   #git submodule update
 
   echo -e "\n\n\n=== AUTOCHECKOUT ${TAG} CHECKOUT ===\n\n\n"
-  git submodule foreach '(git checkout -q ${TAG} && (commit = $(git rev-parse HEAD) ; echo "Tag ${TAG} FOUND for ${name} at ${commit}" ; echo "${name},FOUND,${commit}" > "${toplevel}/${LOCATE_LOG}")) || (git checkout -q master ; commit = $(git rev-parse HEAD) ; echo "Tag ${TAG} MISSING for ${name} before ${commit}" ; echo "${name},MISSING,${commit}" > "${toplevel}/${LOCATE_LOG}")'
+  git submodule foreach '(git checkout -q ${TAG} && (commit=$(git rev-parse HEAD) ; echo "Tag ${TAG} FOUND for ${name} at ${commit}" ; echo "${name},FOUND,${commit}" >> "${toplevel}/${LOCATE_LOG}")) || (git checkout -q master ; commit=$(git rev-parse HEAD) ; echo "Tag ${TAG} MISSING for ${name} before ${commit}" ; echo "${name},MISSING,${commit}" >> "${toplevel}/${LOCATE_LOG}")'
 
   echo "=== AUTOCHECKOUT COMPLETE, BEGIN COMMIT ==="
 
-} 2>&1 > ${MASTER_LOG}
+} &> ${MASTER_LOG}
 
 git commit -a -m "Autocheckout for ${2} at $(date)"
 
