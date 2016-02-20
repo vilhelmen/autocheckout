@@ -43,6 +43,5 @@ This, also, can be automated in the future, but that portion of the GitHub API i
 
 1. Create a submission repository to collect student work in and populate it with student workspace submodules.
 This requires a list of student workspaces and some sort of student ID string.
-*(work in progress)*.
 
 1. Update the master workspace as class proceeds and schedule assignment collection.

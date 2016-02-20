@@ -1,0 +1,42 @@
+GitPython
+
+Single file?
+autocheckout {register collect remove(?)}
+
+Figure out argparse
+
+
+3 operations (2.5?):
+	add (additional) students
+	checkout tag
+	revise tag (checkout again, but mess with pushed tag P1M1 -> P1M1r1)
+
+	Oh, and removing students is probably good maybe. Probably better to toss repo, though
+
+
+For adding students, super simple.
+
+Take in the repo root, roster, and, optionally, a subdir(s) to make it under (make to to pre and post-pend slashes).
+If there are submodules, scrape the userids and strip out userids that are already in the roster
+
+Actually, maybe this is a flaw in the way it works.
+Right now it makes a repo whose internal name is the student id and the repo name is the student id as well.
+This means that if we were tracking multiple repos from one student, the student id needs to be modified in order to work properly.
+Probably best to strip out the --name flag... Now that I've already used the register function the way it's written. OH WELL
+
+
+Now the issue becomes correctly parsing the register. I had hoped to use one register, and adding students is as easy as adding lines to it.
+If the student id isn't what identifies the repo anymore, this may cause it to, well, do what was requested, but in a way you probably didn't want.
+I believe the repo instead gets id'd by the, well, repo name (ex: autocheckout).
+That should work fine, actually.
+It'll prevent duplicate repo checkouts, and that's close enough.
+(what if same repo name, diff actual repos. Check out .git/modules)
+
+
+GitPython has some sort of config walker, so we could parse it and check against the register's URLS.
+Probably better than just passing the command, having it fail, and just assuming that's why it failed.
+
+
+
+
+Checkout is so super easy. Nothing really to worry about here.
