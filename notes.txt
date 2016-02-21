@@ -40,3 +40,34 @@ Probably better than just passing the command, having it fail, and just assuming
 
 
 Checkout is so super easy. Nothing really to worry about here.
+
+
+REMOVING A REPO NOTES:
+submodule deinit
+    wipes the info from the git config
+    removes all files in the submodule
+    leaves the directory
+    leaves the .gitmodules entry for restoration with init (though update --init was needed to restore files in my test)
+    leaves the .git/modules entry (everything does this)
+    change is not committed/recognized
+
+git rm (after a deinit)
+    removes the empty directory
+    removes the .gitmodules record
+    change can be committed
+
+The .git/modules will still remain
+
+Adding a submodule to the same location will cause the system to freak out
+
+So, two options:
+    One repo per iteration of course
+    One repo the course as a whole, but subdirs for semester
+        This is nice, if you want to go back to last semester for some reason...
+        but git will start chugging on status checks with all those submodules (without --ignore-submodules)
+        It's really just not recommended. That's A LOT of data you're going to pile up
+        That may be fine if your submissions are lightweight
+
+fighting the .git/modules directory is such a pain, but it's only a local copy thing.
+So screw it.
+A fresh clone will not have that data
