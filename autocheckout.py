@@ -15,9 +15,9 @@ def comment_strip(iterator):
         yield line
 
 
-class ProgressPrinter(RemoteProgress):
-    def update(self, op_code, cur_count, max_count=None, message=''):
-        print(op_code, cur_count, max_count, cur_count / (max_count or 100.0), message or "NO MESSAGE")
+# class ProgressPrinter(RemoteProgress):
+#     def update(self, op_code, cur_count, max_count=None, message=''):
+#         print(op_code, cur_count, max_count, cur_count / (max_count or 100.0), message or "NO MESSAGE")
 
 
 def register_students(params):
@@ -40,7 +40,7 @@ def register_students(params):
 
     files_added = []
 
-    with open(os.path.join(params['repo_root'], "last_import.log")) as log_file:
+    with open(os.path.join(params['repo_root'], "import.log"), 'w') as log_file:
 
         for reg_line in reg_reader:
             # print(reg_line)
@@ -69,20 +69,20 @@ def register_students(params):
 
     if len(files_added):
         # We added stuff, add our log and modules file
-        files_added.append([".gitmodules", "last_import.log"])
+        files_added.append([".gitmodules", "import.log"])
         print("Adding files to index...")
         # Probably safe
         repository.index.add(files_added)
         print("Committing...")
         # this needs ot be error checked
-        repository.index.commit("Autocheckout student registration at "+time.strftime("%I:%M %p %Z %d/%m/%Y"),
+        repository.index.commit("Autocheckout student registration at " + time.strftime("%I:%M %p %Z %d/%m/%Y"),
                                 committer="Autocheckout")
 
         if repository.remotes.origin.exists():
             # origin exists, let's push
             print("Pushing to origin...")
             try:
-                repository.remotes.origin.push(progress=ProgressPrinter())
+                repository.remotes.origin.push()
             except Exception as e:
                 print("Error pushing to origin! " + str(e))
 
@@ -90,7 +90,46 @@ def register_students(params):
 
 
 def collect_assignment(params):
-    print("Noooope")
+    try:
+        repository = Repo(params['repo_root'])
+    except(InvalidGitRepositoryError, NoSuchPathError):
+        print("Could not open repository!")
+        sys.exit(1)
+
+    # open repo (done)
+    # Recursive pull (all submodules)
+    # checkout of all submodules
+    #   if checkout of tag fails, checkout master
+    # Log checkout status for all modules
+    #   student,status,hash
+    # Commit, tag, optionally push both
+
+    # With recollect... overwrite previous tag?
+    # Need to test what happens if you don't delete the prev tag before pushing the new one
+
+    # AT SOME POINT, refine to support update of certain subdir (i.e. single class)
+    # instead of EVERYTHING
+
+    submodules = repository.submodules
+
+    with open(os.path.join(params['repo_root'], "last_collection.log"), 'w') as log_file, open(
+            os.path.join(params['repo_root'], "last_collection.log"), 'w') as submission_log:
+        print("STUDENT,TAG_STATUS,COMMIT", file=submission_log)
+        if submodules:
+            for submod in submodules:
+                try:
+
+                    # Ok, actually, this is kinda annoying
+                    # we basically have to go call git commands
+                    # So what's the point of this library
+                    # going back to the bash impl.
+
+                except Exception as e:
+                    print("An error occured working with ")
+
+        else:
+            print("Nothing to do!", file=log_file)
+
     return
 
 
