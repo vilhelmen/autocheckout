@@ -29,7 +29,7 @@ echo "STUDENT,${TAG}_STATUS,COMMIT" > ${LOCATE_LOG}
   echo -e "=== AUTOCHECKOUT BEGIN AT $(date) ==="
   echo -e "=== AUTOCHECKOUT PULL ===\n\n\n"
 
-  git pull --recurse-submodules
+  git pull -t --recurse-submodules
 
   #echo -e "=== AUTOCHECKOUT UPDATE ===\n\n\n"
   #git submodule update
