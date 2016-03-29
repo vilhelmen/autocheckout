@@ -1,6 +1,6 @@
 # CSV of student repos and their id
 # Comments have a # at the very beginning of the line and get grep'd out
-# Format is: repo_rel_path,student_id
-# repo_path is the path to a student repo (use SSH for passwordless access)
+# Format is: repo_url,student_id
+# repo_url is the path to a student repo (use SSH for passwordless access)
 # student_id is the student's id string (which the submodule will be named)
 git@github.com:vilhelmen/autocheckout.git,vilhelmen
