@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CSV of student repos and their desired names
 #
 # git requires that names be UNIQUE
@@ -9,6 +10,12 @@
 #
 # repo_path,student_id
 # repo_path is the path to a student repo (use SSH for passwordless access)
+=======
+# CSV of student repos and their id
+# Comments have a # at the very beginning of the line and get grep'd out
+# Format is: repo_url,student_id
+# repo_url is the path to a student repo (use SSH for passwordless access)
+>>>>>>> master
 # student_id is the student's id string (which the submodule will be named)
 vilhelmen,git@github.com:vilhelmen/autocheckout.git
 CS8470_F14/vilhelmen,git@github.com:vilhelmen/fake_repo.git
