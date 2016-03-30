@@ -89,7 +89,7 @@ def register_students(params):
     full_log = create_multilog("full_log", "logs/last_import.log", 'w')
     result_log = create_multilog("import_results", "logs/import_status.log", 'w')
 
-    full_log.info("=== Preparing to import new students ===")
+    full_log.info("=== Preparing Registration ===")
 
     result_log.info("STUDENT,STATUS")
     # Alrighty, just open the csv and loop for all the entries
@@ -125,8 +125,11 @@ def register_students(params):
 
         # if I was smart, I'd figure out how to wrap that subprocess call and just make it return a bool
         # well, I tried
+        print("=== Adding Files ===")
         if run_command(['git', 'add', '--all'], "add", print):
+            print("=== Committing ===")
             if run_command(['git', 'commit', '-m', '"Student registration at ' + time.ctime()], "commit", print):
+                print("=== Pushing ===")
                 run_command(['git', 'push'], "push", print)
 
     return
@@ -182,7 +185,7 @@ def collect_assignment(params):
 
 
 def init_repository(params):
-    # does repo_root exist? Create it.
+    # does repo_root exist? Create it. (but don't go crazy with directories)
     # is it under version control? Git init
     # setup autocheckout stuff. Idk.
     print("Nooope")
