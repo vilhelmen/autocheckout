@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
-from git import *
 import sys
 import csv
 import os.path
 import time
+import subprocess
+import logging
 
 
 def comment_strip(iterator):
@@ -15,127 +16,178 @@ def comment_strip(iterator):
         yield line
 
 
-# class ProgressPrinter(RemoteProgress):
-#     def update(self, op_code, cur_count, max_count=None, message=''):
-#         print(op_code, cur_count, max_count, cur_count / (max_count or 100.0), message or "NO MESSAGE")
+def check_initialized():
+    # Has it been initialized?
+    if os.path.exists('.autocheckout'):
+        return True
+    else:
+        print("Repo hasn't been initialized yet, exiting.")
+        return False
+
+
+def verify_and_cwd(params):
+    try:
+        # Does the dir exist?
+        os.chdir(params['repo_root'])
+        # Is it a repo?
+        subprocess.run(['git', 'rev-parse'], check=True)
+    except OSError as err:
+        print("Repo does not exist, or permission denied: {0}".format(err))
+        raise
+    except subprocess.CalledProcessError as err:
+        print("Git says this isn't a repository!")
+        raise
+    except:
+        print("Mystery error occurred: ", sys.exc_info()[0])
+        raise
+    return
+
+
+def create_multilog(log_stream, logfile_path, mode='a'):
+    master_log = logging.getLogger(log_stream)
+    master_log.setLevel(logging.INFO)
+
+    stdout_log = logging.StreamHandler(sys.stdout)
+    stdout_log.setLevel(logging.INFO)
+
+    file_log = logging.FileHandler(logfile_path, mode=mode)
+    file_log.setLevel(logging.INFO)
+
+    master_log.addHandler(stdout_log)
+    master_log.addHandler(file_log)
+
+    return master_log
+
+
+def run_command(command, activity_err_str, log_function):
+    try:
+        # Launch git
+        result = subprocess.run(command, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                check=True)
+        # output?
+        result = result.stdout.strip()
+        if result:
+            log_function(result)
+    except subprocess.CalledProcessError as err:
+        # Git returned an error code
+        log_function("Failed to {0}, git returned {1}, says:\n=~=\n{2}\n=~=".format(activity_err_str, err.returncode,
+                                                                                  err.stdout.strip()))
+    except OSError as err:
+        # Git magically stopped existing. Or other OS errors, couldn't fork, etc.
+        log_function("Mystery OS error. OS says:\n=~=\n{0}\n=~=".format(err))
+    except Exception as err:
+        # Idk, man. Computers are hard.
+        log_function("Mystery error! Exception says:\n=~=\n{0}\n=~=".format(err))
+    else:
+        return True
+    return False
 
 
 def register_students(params):
+    # already verified, cwd is repo_root
+    # Start logging
+    full_log = create_multilog("full_log", "logs/last_import.log", 'w')
+    result_log = create_multilog("import_results", "logs/import_status.log", 'w')
+
+    full_log.info("=== Preparing to import new students ===")
+
+    result_log.info("STUDENT,STATUS")
+    # Alrighty, just open the csv and loop for all the entries
+
     try:
-        repository = Repo(params['repo_root'])
-    except(InvalidGitRepositoryError, NoSuchPathError):
-        print("Could not open repository!")
-        sys.exit(1)
-
-    # open repo (done)
-    # get config parser to rip out submodule urls (explicitly use .gitmodules?)
-    # start an import log file
-    # toss out existing repos and log them as duplicates - duplicates ignored
-    # init all submodules and log
-    # commit
-    # create tag
-    # if remote, push commit and tag
-
-    reg_reader = csv.reader(comment_strip(params['import_file']))
-
-    files_added = []
-
-    with open(os.path.join(params['repo_root'], "import.log"), 'w') as log_file:
-
-        for reg_line in reg_reader:
-            # print(reg_line)
-            if len(reg_line) != 2:
-                print("Skipping bad entry: ", reg_line)
-                print("Skipping bad entry: ", reg_line, file=log_file)
+        student_list = csv.reader(comment_strip(params['import_file']))
+    except Exception as err:
+        full_log.info("Something terrible happened with the reader. Exception says:\n===\n{0}\n===".format(err))
+        raise
+    else:
+        for registration_info in student_list:
+            # Good input?
+            if len(registration_info) != 2:
+                full_log.info("Skipping bad entry '%s'", registration_info)
                 continue
+            # Pull out data
+            repo = registration_info[0]
+            student = registration_info[1]
 
-            try:
-                repository.create_submodule(name=reg_line[0], path=reg_line[0], url=reg_line[1], branch='master')
-            except:
-                # In my tests, if the repo url is bad, it throws an exception with a weird name
-                # (something about reading a file that is closed)
-                # so it's a generic catch because who knows what happens
-                # if it fails, the folders probably exist, but nothing is registered with git
-                print("Could not register ", reg_line[0])
-                print("Could not register ", reg_line[0], file=log_file)
-                continue
+            full_log.info("Registering '%s' @ '%s'...", student, repo)
+            # if submodule_add(student, repo, params['subdir'], full_log):
+            if run_command(
+                    ['git', 'submodule', 'add', '--name', student, repo, params['subdir'] + '/' + student],
+                    "register student '{0}'".format(student), full_log.info):
+                result_log.info(student + ",REGISTERED")
+            else:
+                result_log.info(student + ",ERROR")
 
-            files_added.append(reg_line[0])
+        # well, at the least, SOMETHING happened
+        # Close the logs because we're about to commit them
+        full_log.info("=== Committing Changes ===")
+        logging.shutdown()
 
-            print("Registered ", reg_line[0])
-            print("Registered ", reg_line[0], file=log_file)
-
-    # existing submodules are silently ignored by GitPython (OR SO IT SAYS), but I guess that's ok?
-
-    if len(files_added):
-        # We added stuff, add our log and modules file
-        files_added.append([".gitmodules", "import.log"])
-        print("Adding files to index...")
-        # Probably safe
-        repository.index.add(files_added)
-        print("Committing...")
-        # this needs ot be error checked
-        repository.index.commit("Autocheckout student registration at " + time.strftime("%I:%M %p %Z %d/%m/%Y"),
-                                committer="Autocheckout")
-
-        if repository.remotes.origin.exists():
-            # origin exists, let's push
-            print("Pushing to origin...")
-            try:
-                repository.remotes.origin.push()
-            except Exception as e:
-                print("Error pushing to origin! " + str(e))
+        # if I was smart, I'd figure out how to wrap that subprocess call and just make it return a bool
+        # well, I tried
+        if run_command(['git', 'add', '--all'], "add", print):
+            if run_command(['git', 'commit', '-m', '"Student registration at ' + time.ctime()], "commit", print):
+                run_command(['git', 'push'], "push", print)
 
     return
 
 
 def collect_assignment(params):
-    try:
-        repository = Repo(params['repo_root'])
-    except(InvalidGitRepositoryError, NoSuchPathError):
-        print("Could not open repository!")
-        sys.exit(1)
+    print("Noooope")
+    return
+    # ['git', 'tag', '-a', tag_name, '-m', tag_msg]
 
-    # open repo (done)
-    # Recursive pull (all submodules)
-    # checkout of all submodules
-    #   if checkout of tag fails, checkout master
-    # Log checkout status for all modules
-    #   student,status,hash
-    # Commit, tag, optionally push both
 
-    # With recollect... overwrite previous tag?
-    # Need to test what happens if you don't delete the prev tag before pushing the new one
+#     try:
+#         repository = Repo(params['repo_root'])
+#     except(InvalidGitRepositoryError, NoSuchPathError):
+#         print("Could not open repository!")
+#         sys.exit(1)
+#
+#     # open repo (done)
+#     # Recursive pull (all submodules)
+#     # checkout of all submodules
+#     #   if checkout of tag fails, checkout master
+#     # Log checkout status for all modules
+#     #   student,status,hash
+#     # Commit, tag, optionally push both
+#
+#     # With recollect... overwrite previous tag?
+#     # Need to test what happens if you don't delete the prev tag before pushing the new one
+#
+#     # AT SOME POINT, refine to support update of certain subdir (i.e. single class)
+#     # instead of EVERYTHING
+#
+#     submodules = repository.submodules
+#
+#     with open(os.path.join(params['repo_root'], "last_collection.log"), 'w') as log_file, open(
+#             os.path.join(params['repo_root'], "last_collection.log"), 'w') as submission_log:
+#         print("STUDENT,TAG_STATUS,COMMIT", file=submission_log)
+#         if submodules:
+#             for submod in submodules:
+#                 try:
+#
+#                 # Ok, actually, this is kinda annoying
+#                 # we basically have to go call git commands
+#                 # So what's the point of this library
+#                 # going back to the bash impl.
+#
+#                 except Exception as e:
+#                     print("An error occured working with ")
+#
+#         else:
+#             print("Nothing to do!", file=log_file)
+#
+#     return
 
-    # AT SOME POINT, refine to support update of certain subdir (i.e. single class)
-    # instead of EVERYTHING
 
-    submodules = repository.submodules
-
-    with open(os.path.join(params['repo_root'], "last_collection.log"), 'w') as log_file, open(
-            os.path.join(params['repo_root'], "last_collection.log"), 'w') as submission_log:
-        print("STUDENT,TAG_STATUS,COMMIT", file=submission_log)
-        if submodules:
-            for submod in submodules:
-                try:
-
-                    # Ok, actually, this is kinda annoying
-                    # we basically have to go call git commands
-                    # So what's the point of this library
-                    # going back to the bash impl.
-
-                except Exception as e:
-                    print("An error occured working with ")
-
-        else:
-            print("Nothing to do!", file=log_file)
-
+def init_repository(params):
+    # does repo_root exist? Create it.
+    # is it under version control? Git init
+    # setup autocheckout stuff. Idk.
+    print("Nooope")
     return
 
-
-# def init_repository(params):
-#     print("Nooope")
-#     return
 
 # def remove_students(params):
 #     print("Nooope")
@@ -149,7 +201,8 @@ def parse_and_execute():
     register_parser = subparse_master.add_parser('register', help="Register students")
     register_parser.add_argument('repo_root', type=str, help="Path to the submission repository")
     register_parser.add_argument('import_file', type=argparse.FileType('r'), help="Student list to register")
-    register_parser.add_argument('--subdir', type=str, help="Subdirectory to place repositories into")
+    register_parser.add_argument('--subdir', type=str, default='workspaces',
+                                 help="Subdirectory to place repositories into")
     register_parser.set_defaults(action=register_students)
 
     collect_parser = subparse_master.add_parser('collect', help="Collect assignment")
@@ -158,8 +211,9 @@ def parse_and_execute():
     collect_parser.add_argument('--recollect', action='store_true', help="Recollect tag")
     collect_parser.set_defaults(action=collect_assignment)
 
-    # init_parser = subparse_master.add_parser('initialize', help="Create a new submission repo")
-    # init_parser.add_argument('repo_root', help="Repository to create")
+    init_parser = subparse_master.add_parser('init', help="Create a new submission repo")
+    init_parser.add_argument('repo_root', help="Repository to create")
+    init_parser.set_defaults(action=init_repository)
     # init_parser.add_argument('remote_url', help="Repository to ")
 
     args = parser.parse_args()
@@ -173,7 +227,10 @@ def parse_and_execute():
 
     # print(params)
 
-    params['action'](params)
+    verify_and_cwd(params)
+
+    if params['action'] == init_repository or check_initialized():
+        params['action'](params)
 
     return
 
