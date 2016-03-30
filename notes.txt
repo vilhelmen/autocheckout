@@ -1,73 +1,16 @@
-GitPython
+gitpython = no. It's a not-so-great wrapper that doesn't cover all my needs
 
-Single file?
-autocheckout {register collect remove(?)}
+Now everything is going to be more centralized.
+There will be an initialization step involved.
+But that leads to the question, do we offload import to classroom tools, or just do it ourselves?
 
-Figure out argparse
+... API access to the github import tool is under development and I'm not smart enough to write the API calls manually
+... Same with repo locking
 
+So for the moment I think I may do the unthinkable and mix a library and custom api commands
 
-3 operations (2.5?):
-	add (additional) students
-	checkout tag
-	revise tag (checkout again, but mess with pushed tag P1M1 -> P1M1r1)
+https://github.com/sigmavirus24/github3.py for general management
 
-	Oh, and removing students is probably good maybe. Probably better to toss repo, though
+https://github.com/kennethreitz/requests and maybe https://github.com/sigmavirus24/uritemplate for commands for import & repo locking
 
-
-For adding students, super simple.
-
-Take in the repo root, roster, and, optionally, a subdir(s) to make it under (make to to pre and post-pend slashes).
-If there are submodules, scrape the userids and strip out userids that are already in the roster
-
-Actually, maybe this is a flaw in the way it works.
-Right now it makes a repo whose internal name is the student id and the repo name is the student id as well.
-This means that if we were tracking multiple repos from one student, the student id needs to be modified in order to work properly.
-Probably best to strip out the --name flag... Now that I've already used the register function the way it's written. OH WELL
-
-
-Now the issue becomes correctly parsing the register. I had hoped to use one register, and adding students is as easy as adding lines to it.
-If the student id isn't what identifies the repo anymore, this may cause it to, well, do what was requested, but in a way you probably didn't want.
-I believe the repo instead gets id'd by the, well, repo name (ex: autocheckout).
-That should work fine, actually.
-It'll prevent duplicate repo checkouts, and that's close enough.
-(what if same repo name, diff actual repos. Check out .git/modules)
-
-
-GitPython has some sort of config walker, so we could parse it and check against the register's URLS.
-Probably better than just passing the command, having it fail, and just assuming that's why it failed.
-
-
-
-
-Checkout is so super easy. Nothing really to worry about here.
-
-
-REMOVING A REPO NOTES:
-submodule deinit
-    wipes the info from the git config
-    removes all files in the submodule
-    leaves the directory
-    leaves the .gitmodules entry for restoration with init (though update --init was needed to restore files in my test)
-    leaves the .git/modules entry (everything does this)
-    change is not committed/recognized
-
-git rm (after a deinit)
-    removes the empty directory
-    removes the .gitmodules record
-    change can be committed
-
-The .git/modules will still remain
-
-Adding a submodule to the same location will cause the system to freak out
-
-So, two options:
-    One repo per iteration of course
-    One repo the course as a whole, but subdirs for semester
-        This is nice, if you want to go back to last semester for some reason...
-        but git will start chugging on status checks with all those submodules (without --ignore-submodules)
-        It's really just not recommended. That's A LOT of data you're going to pile up
-        That may be fine if your submissions are lightweight
-
-fighting the .git/modules directory is such a pain, but it's only a local copy thing.
-So screw it.
-A fresh clone will not have that data
+Oh man.
