@@ -18,6 +18,64 @@ https://github.com/kennethreitz/requests
 https://github.com/sigmavirus24/uritemplate
 for commands for import & repo locking but maybe I'll just wait for now because ugh
 
+Version ineedthisworking:
+
+INIT:
+	investigates path, making needed things
+		repo dir
+		git repo
+		folder
+			logs
+			# datafile
+				# token - string
+				# workdir - string (not set yet, name of workspaces directory)
+				# remote_enabled - bool, says if we should try to push all work
+				# version - int(?), version number, because oh man will this change a lot
+	Start logging
+	# Authenticate
+	# Create token
+	# Offer to create key and add to account
+	#		spit out ssh config blurb
+	#		(name github.com, username git, key, identityonly, identityfile, etc)
+	# Offer to create repo and hook into account
+	terminate log
+	add
+	commit
+	optionally push
+
+REGISTER:
+	validate # and load settings
+	start logging, general and status
+	add repos specified by file/stdin to workdir, logging success to status
+	terminate logs
+	add
+	commit
+	optionally push
+
+CHECKOUT:
+	validate and, PULL # THEN LOAD SETTINGS
+	start logging, general and status
+	recursive submodule fetch/merge/whatever
+	submodule foreach (manual foreach?) of previous script(?), logging status
+	(It may be better in the long run to manually do the updating and checking out)
+	(This way, individual repos can be flagged as having errors, or whatnot)
+	(Using foreach requires I parse my own output)
+	(have git dump all submodule locations, run manually?)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+LATER:
 
 INIT:
 	Make a new repo, unless dir/git repo already exists

@@ -5,8 +5,14 @@ import sys
 import csv
 import os.path
 import time
-import subprocess
 import logging
+import subprocess
+
+try:
+    from sh import git
+except ImportError:
+    print("Git not on path?!")
+    raise
 
 
 def comment_strip(iterator):
@@ -56,30 +62,31 @@ def create_multilog(log_stream, logfile_path, mode='a'):
     master_log.addHandler(stdout_log)
     master_log.addHandler(file_log)
 
-    return master_log
+    return master_log, file_log
 
 
-def run_command(command, activity_err_str, log_function):
+def run_command(command, log_function):
     try:
         # Launch git
-        result = subprocess.run(command, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                check=True)
-        # output?
-        result = result.stdout.strip()
-        if result:
-            log_function(result)
-    except subprocess.CalledProcessError as err:
-        # Git returned an error code
-        log_function("Failed to {0}, git returned {1}, says:\n=~=\n{2}\n=~=".format(activity_err_str, err.returncode,
-                                                                                  err.stdout.strip()))
-    except OSError as err:
-        # Git magically stopped existing. Or other OS errors, couldn't fork, etc.
+        with subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, bufsize=1) as proc:
+            for line in proc.stdout:
+                # If it's print, I can just say end=''
+                # Which is lovely. Logger, however, refuses to play nice.
+                # It would be fine if we were waiting for the output in one hunk
+                # But this way we stay live, but we would explode the log with newlines
+                log_function(line[:-1] if line[-1] == '\n' else line)
+                if proc.wait() == 0:
+                    return True
+                else:
+                    return False
+
+    except OSError as err:  # Git magically stopped existing. Or other OS errors, couldn't fork, etc.
         log_function("Mystery OS error. OS says:\n=~=\n{0}\n=~=".format(err))
     except Exception as err:
         # Idk, man. Computers are hard.
         log_function("Mystery error! Exception says:\n=~=\n{0}\n=~=".format(err))
-    else:
-        return True
+
     return False
 
 
