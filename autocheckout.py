@@ -6,13 +6,7 @@ import csv
 import os.path
 import time
 import logging
-import subprocess
-
-try:
-    from sh import git
-except ImportError:
-    print("Git not on path?!")
-    raise
+import subprocess  # sh sounds cool, but I'm just going to stick to subprocess
 
 
 def comment_strip(iterator):
@@ -22,122 +16,175 @@ def comment_strip(iterator):
         yield line
 
 
-def check_initialized():
-    # Has it been initialized?
-    if os.path.exists('.autocheckout'):
+class MultiLog:
+    def __init__(self, log_stream, logfile_path, mode='a'):
+        self.master_log = logging.getLogger(log_stream)
+        self.master_log.setLevel(logging.INFO)
+        stdout_log = logging.StreamHandler(sys.stdout)
+        stdout_log.setLevel(logging.INFO)
+        self.master_log.addHandler(stdout_log)
+        try:
+            self.file_log = logging.FileHandler(logfile_path, mode=mode)
+        except:
+            print("Log file '{0}' could not be created!".format(logfile_path))
+            raise
+        self.file_log.setLevel(logging.INFO)
+        self.master_log.addHandler(self.file_log)
+
+    def close_file(self):
+        self.master_log.removeHandler(self.file_log)
+        self.file_log.close()
+
+    def log(self, msg, *args, **kwargs):
+        self.master_log.info(msg, *args, **kwargs)
+
+
+def tentative_sync(log=print):
+    # We're going to attempt tp pull/push
+    # Return true if either there is no remote, or we pulled/pushed successfully
+    log("=== Syncing ===")
+    # silently query if git has a remote called origin
+    # (a pull with no remote and a pull that conflicts both return 1)
+    remote_status = run_manual_command(['git', 'remote', 'get-url', 'origin'], log, True)
+    if remote_status == 0:
+        # remote exists, cool.
+        pull_status = run_manual_command(['git', 'pull', '--no-edit', 'origin', 'master'], log)
+        if pull_status == 0:
+            log("Pull from master successful, attempting to push any changes.")
+            push_status = run_manual_command(['git', 'push', '--follow-tags', 'origin', 'master'], log)
+            if push_status == 0:
+                log("Push successful, sync complete!")
+                return True
+            if push_status == 1:
+                log("Push failed for some reason. Halting :(")
+                return False
+            else:
+                log("Git/the OS exploded on us. Halting :(")
+                return False
+
+        elif pull_status == 1:
+            log("Pull failed. Either there's a conflict, or the network's down.\n"
+                "Manual correction required to continue :(\n"
+                "I am so sorry. You're probably about to have a bad day.")
+            return False
+        else:
+            log("Git/the OS exploded on us. Halting :(")
+            return False
+
+    elif remote_status == 128:
+        log("Remote 'origin' does not exist, nothing to do.")
         return True
+    else:
+        log("Git/the OS exploded on us. Halting :(")
+        return False
+
+
+def check_and_sync():
+    # Has it been initialized?
+    if os.path.exists('autocheckout') and os.path.exists('autocheckout/logs'):
+        # should return True if either there's no remote, or we synced fine
+        return tentative_sync()
+
     else:
         print("Repo hasn't been initialized yet, exiting.")
         return False
 
 
-def verify_and_cwd(params):
+def verify_git_and_cwd(params):
     try:
         # Does the dir exist?
         os.chdir(params['repo_root'])
         # Is it a repo?
-        subprocess.run(['git', 'rev-parse'], check=True)
+        return run_command(['git', 'rev-parse'], "verify repository", print)
     except OSError as err:
-        print("Repo does not exist, or permission denied: {0}".format(err))
-        raise
-    except subprocess.CalledProcessError as err:
-        print("Git says this isn't a repository!")
-        raise
-    except:
-        print("Mystery error occurred: ", sys.exc_info()[0])
-        raise
-    return
+        print("Repo does not exist / permission denied / something broke: {0}".format(err))
+    except Exception as err:
+        print("Mystery error occurred: {0}".format(err))
+    return False
 
 
-def create_multilog(log_stream, logfile_path, mode='a'):
-    master_log = logging.getLogger(log_stream)
-    master_log.setLevel(logging.INFO)
-
-    stdout_log = logging.StreamHandler(sys.stdout)
-    stdout_log.setLevel(logging.INFO)
-
-    file_log = logging.FileHandler(logfile_path, mode=mode)
-    file_log.setLevel(logging.INFO)
-
-    master_log.addHandler(stdout_log)
-    master_log.addHandler(file_log)
-
-    return master_log, file_log
+# Returns True/False if exec returned 0
+# Spits out error message if it failed
+def run_command(command, activity, log_func, silent=False):
+    if run_manual_command(command, log_func, silent) != 0:
+        log_func("=~= Failed to {0} =~=".format(activity))
+        return False
+    return True
 
 
-def run_command(command, log_function):
+# Returns error code for processing
+def run_manual_command(command, log_func, silent=False):
     try:
         # Launch git
         with subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE,
-                              stderr=subprocess.STDOUT, bufsize=1) as proc:
-            for line in proc.stdout:
-                # If it's print, I can just say end=''
-                # Which is lovely. Logger, however, refuses to play nice.
-                # It would be fine if we were waiting for the output in one hunk
-                # But this way we stay live, but we would explode the log with newlines
-                log_function(line[:-1] if line[-1] == '\n' else line)
-                if proc.wait() == 0:
-                    return True
-                else:
-                    return False
+                              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, bufsize=1) as proc:
+            if not silent:
+                for line in proc.stdout:
+                    # If it's print, I can just say end=''
+                    # Which is lovely. Logger, however, refuses to play nice.
+                    # It would be fine if we were waiting for the output in one hunk
+                    # But this way we stay live, but we would explode the log with newlines
+                    log_func(line[:-1] if line[-1] == '\n' else line)
+            return proc.wait()
 
     except OSError as err:  # Git magically stopped existing. Or other OS errors, couldn't fork, etc.
-        log_function("Mystery OS error. OS says:\n=~=\n{0}\n=~=".format(err))
+        log_func("Mystery OS error. OS says:\n=~=\n{0}\n=~=".format(err))
     except Exception as err:
         # Idk, man. Computers are hard.
-        log_function("Mystery error! Exception says:\n=~=\n{0}\n=~=".format(err))
+        log_func("Mystery error! Exception says:\n=~=\n{0}\n=~=".format(err))
 
-    return False
+    return -999
 
 
 def register_students(params):
     # already verified, cwd is repo_root
     # Start logging
-    full_log = create_multilog("full_log", "logs/last_import.log", 'w')
-    result_log = create_multilog("import_results", "logs/import_status.log", 'w')
+    full_log = MultiLog("full_log", "autocheckout/logs/last_import.log", 'w')
+    result_log = MultiLog("import_results", "autocheckout/logs/import_status.log", 'w')
 
-    full_log.info("=== Preparing Registration ===")
+    full_log.log("=== Preparing Registration ===")
 
-    result_log.info("STUDENT,STATUS")
+    result_log.log("STUDENT,STATUS")
     # Alrighty, just open the csv and loop for all the entries
 
     try:
         student_list = csv.reader(comment_strip(params['import_file']))
     except Exception as err:
-        full_log.info("Something terrible happened with the reader. Exception says:\n===\n{0}\n===".format(err))
+        full_log.log("Something terrible happened with the reader. Exception says:\n===\n{0}\n===".format(err))
         raise
     else:
         for registration_info in student_list:
             # Good input?
             if len(registration_info) != 2:
-                full_log.info("Skipping bad entry '%s'", registration_info)
+                full_log.log("Skipping bad entry '%s'", registration_info)
                 continue
             # Pull out data
             repo = registration_info[0]
             student = registration_info[1]
 
-            full_log.info("Registering '%s' @ '%s'...", student, repo)
+            full_log.log("Registering '%s' @ '%s'...", student, repo)
             # if submodule_add(student, repo, params['subdir'], full_log):
             if run_command(
                     ['git', 'submodule', 'add', '--name', student, repo, params['subdir'] + '/' + student],
-                    "register student '{0}'".format(student), full_log.info):
-                result_log.info(student + ",REGISTERED")
+                    "register student '{0}'".format(student), full_log.log):
+                result_log.log(student + ",REGISTERED")
             else:
-                result_log.info(student + ",ERROR")
+                result_log.log(student + ",ERROR")
 
         # well, at the least, SOMETHING happened
         # Close the logs because we're about to commit them
-        full_log.info("=== Committing Changes ===")
-        logging.shutdown()
+        full_log.log("=== Committing Changes ===")
+        full_log.close_file()
+        result_log.close_file()
 
         # if I was smart, I'd figure out how to wrap that subprocess call and just make it return a bool
         # well, I tried
-        print("=== Adding Files ===")
-        if run_command(['git', 'add', '--all'], "add", print):
-            print("=== Committing ===")
-            if run_command(['git', 'commit', '-m', '"Student registration at ' + time.ctime()], "commit", print):
-                print("=== Pushing ===")
-                run_command(['git', 'push'], "push", print)
+        full_log.log("=== Adding Files ===")
+        if run_command(['git', 'add', '--all'], "add changes", full_log.log):
+            full_log.log("=== Committing ===")
+            if run_command(['git', 'commit', '-m', '"Student registration at ' + time.ctime()], "commit changes",
+                           full_log.log):
+                tentative_sync()
 
     return
 
@@ -237,10 +284,9 @@ def parse_and_execute():
 
     # print(params)
 
-    verify_and_cwd(params)
-
-    if params['action'] == init_repository or check_initialized():
-        params['action'](params)
+    if verify_git_and_cwd(params):
+        if params['action'] == init_repository or check_and_sync():
+            params['action'](params)
 
     return
 
