@@ -7,10 +7,35 @@ But that leads to the question, do we offload import to classroom tools, or just
 ... API access to the github import tool is under development and I'm not smart enough to write the API calls manually
 ... Same with repo locking
 
-So for the moment I think I may do the unthinkable and mix a library and custom api commands
+Octokit has all the features needed? But it's ruby/objective-c/.net, and I'm already having a hard enough time with python
 
-https://github.com/sigmavirus24/github3.py for general management
+Classroom's link setup is pretty nice. Although I suppose it could be done with a google form or something to collect usernames
 
-https://github.com/kennethreitz/requests and maybe https://github.com/sigmavirus24/uritemplate for commands for import & repo locking
+https://github.com/sigmavirus24/github3.py for general management, scraping repos, etc.
 
-Oh man.
+consider
+https://github.com/kennethreitz/requests
+https://github.com/sigmavirus24/uritemplate
+for commands for import & repo locking but maybe I'll just wait for now because ugh
+
+
+INIT:
+	Make a new repo, unless dir/git repo already exists
+	Check for current install (autocheckout dir exists), halt if it exists
+	Make directory tree:
+		autocheckout
+			logs
+				init.log (start log file, so when it's added, so it the direcotries, git doesn't like empty folders)
+
+	Authenticate with git, get a token. Start building datastructure (map) for use with pickle
+		track:
+			token
+			workspace dir (set by registration, just make empty)
+			users (map of user_id and ids) (links github name to class id)
+
+	write out data to autocheckout dir
+	close logs
+	Add, Commit, optionally create remote via api and push (this may fail if org/user doesn't have private repos)
+
+REGISTER:
+	This is two step at the moment :/
