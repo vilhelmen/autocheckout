@@ -11,7 +11,8 @@ import subprocess  # sh sounds cool, but I'm just going to stick to subprocess
 
 def comment_strip(iterator):
     for line in iterator:
-        if line[:1] == '#' or not line.strip():
+        line = line.strip()
+        if not line or line[:1] == '#':
             continue
         yield line
 
@@ -38,8 +39,11 @@ class MultiLog:
     def log(self, msg, *args, **kwargs):
         self.master_log.info(msg, *args, **kwargs)
 
+    def __call__(self, msg, *args, **kwargs):
+        self.log(msg, *args, **kwargs)
 
-def tentative_sync(log=print):
+
+def tentative_sync(log):
     # We're going to attempt tp pull/push
     # Return true if either there is no remote, or we pulled/pushed successfully
     log("=== Syncing ===")
@@ -83,11 +87,30 @@ def check_and_sync():
     # Has it been initialized?
     if os.path.exists('autocheckout') and os.path.exists('autocheckout/logs'):
         # should return True if either there's no remote, or we synced fine
-        return tentative_sync()
+        return tentative_sync(print)
 
     else:
         print("Repo hasn't been initialized yet, exiting.")
         return False
+
+
+def add_files(log):
+    log("=== Adding Files ===")
+    return run_command(['git', 'add', '--all'], "add changes", log)
+
+
+def commit_files(commit_message, log):
+    if commit_message:
+        log("=== Committing ===")
+        return run_command(['git', 'commit', '-m', commit_message], "commit changes", log)
+    return False
+
+
+def tag_commit(tag_name, tag_message, log):
+    if tag_name and tag_message:
+        log("=== Tagging ===")
+        return run_command(['git', 'tag', '-a', tag_name, '-m', tag_message], "tag commit", log)
+    return False
 
 
 def verify_git_and_cwd(params):
@@ -142,49 +165,44 @@ def register_students(params):
     full_log = MultiLog("full_log", "autocheckout/logs/last_import.log", 'w')
     result_log = MultiLog("import_results", "autocheckout/logs/import_status.log", 'w')
 
-    full_log.log("=== Preparing Registration ===")
+    full_log("=== Preparing Registration ===")
 
-    result_log.log("STUDENT,STATUS")
+    result_log("STUDENT,STATUS")
     # Alrighty, just open the csv and loop for all the entries
 
     try:
         student_list = csv.reader(comment_strip(params['import_file']))
     except Exception as err:
-        full_log.log("Something terrible happened with the reader. Exception says:\n===\n{0}\n===".format(err))
+        full_log("Something terrible happened with the reader. Exception says:\n===\n{0}\n===".format(err))
         raise
     else:
         for registration_info in student_list:
             # Good input?
             if len(registration_info) != 2:
-                full_log.log("Skipping bad entry '%s'", registration_info)
+                full_log("Skipping bad entry '%s'", registration_info)
                 continue
             # Pull out data
             repo = registration_info[0]
             student = registration_info[1]
 
-            full_log.log("Registering '%s' @ '%s'...", student, repo)
+            full_log("Registering '%s' @ '%s'...", student, repo)
             # if submodule_add(student, repo, params['subdir'], full_log):
             if run_command(
                     ['git', 'submodule', 'add', '--name', student, repo, params['subdir'] + '/' + student],
-                    "register student '{0}'".format(student), full_log.log):
-                result_log.log(student + ",REGISTERED")
+                    "register student '{0}'".format(student), full_log):
+                result_log(student + ",REGISTERED")
             else:
-                result_log.log(student + ",ERROR")
+                result_log(student + ",ERROR")
 
         # well, at the least, SOMETHING happened
         # Close the logs because we're about to commit them
-        full_log.log("=== Committing Changes ===")
+        full_log("=== Committing Changes ===")
         full_log.close_file()
         result_log.close_file()
 
-        # if I was smart, I'd figure out how to wrap that subprocess call and just make it return a bool
-        # well, I tried
-        full_log.log("=== Adding Files ===")
-        if run_command(['git', 'add', '--all'], "add changes", full_log.log):
-            full_log.log("=== Committing ===")
-            if run_command(['git', 'commit', '-m', '"Student registration at ' + time.ctime()], "commit changes",
-                           full_log.log):
-                tentative_sync()
+        if add_files(full_log):
+            if commit_files('"Student registration at ' + time.ctime(), full_log):
+                tentative_sync(full_log)
 
     return
 
@@ -192,7 +210,6 @@ def register_students(params):
 def collect_assignment(params):
     print("Noooope")
     return
-    # ['git', 'tag', '-a', tag_name, '-m', tag_msg]
 
 
 #     try:
@@ -242,7 +259,40 @@ def init_repository(params):
     # does repo_root exist? Create it. (but don't go crazy with directories)
     # is it under version control? Git init
     # setup autocheckout stuff. Idk.
-    print("Nooope")
+    print("=== Initializing Repository ===")
+    if run_command(['git', 'init', params['repo_root']], "initialize git repository", print):
+        # Cool. Make directories
+        if verify_git_and_cwd(params):
+            if os.path.exists('autocheckout'):
+                print("=~= ERROR: Autocheckout already initialized. Halting. =~=")
+            else:
+                try:
+                    os.mkdir('autocheckout', 0o755)
+                    os.mkdir('autocheckout/logs', 0o755)
+
+                    # This log mostly exists so we can add the directory hierarchy
+                    # Git doesn't like empty folders
+                    full_log = MultiLog('log_init', 'autocheckout/logs/init.log', 'a')
+                    if params['remote_url']:
+                        full_log("=== Preparing Remote ===")
+                        remote = params['remote_url']
+                        full_log("=~= WARNING: Access to origin must be keyless =~=")
+                        run_command(['git', 'remote', 'add', 'origin', remote], "add remote 'origin' @ '{0}".format(remote),
+                                    full_log)
+
+                    full_log("=== Initialization Complete ===")
+                    full_log("=== Saving State ===")
+                    full_log.close_file()
+
+                    if add_files(full_log):
+                        if commit_files("Repository Initialization", full_log):
+                            tentative_sync(full_log)
+
+                except OSError as err:
+                    print("Couldn't make directory structure, OS says: {0}".format(err))
+                except Exception as err:
+                    print("Mystery error! {0}".format(err))
+
     return
 
 
@@ -270,8 +320,8 @@ def parse_and_execute():
 
     init_parser = subparse_master.add_parser('init', help="Create a new submission repo")
     init_parser.add_argument('repo_root', help="Repository to create")
+    init_parser.add_argument('--remote_url', help="New remote to hook up to")
     init_parser.set_defaults(action=init_repository)
-    # init_parser.add_argument('remote_url', help="Repository to ")
 
     args = parser.parse_args()
 
@@ -282,11 +332,10 @@ def parse_and_execute():
         parser.print_help()
         parser.exit(1)
 
-    # print(params)
+    print(params)
 
-    if verify_git_and_cwd(params):
-        if params['action'] == init_repository or check_and_sync():
-            params['action'](params)
+    if params['action'] == init_repository or (verify_git_and_cwd(params) and check_and_sync()):
+        params['action'](params)
 
     return
 
