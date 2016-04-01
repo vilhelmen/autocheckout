@@ -122,7 +122,7 @@ def verify_git_and_cwd(params):
     except OSError as err:
         print("Repo does not exist / permission denied / something broke: {0}".format(err))
     except Exception as err:
-        print("Mystery error occurred: {0}".format(err))
+        print("Mystery error! {0} {1}".format(err, sys.exc_info()[0]))
     return False
 
 
@@ -151,10 +151,10 @@ def run_manual_command(command, log_func, silent=False):
             return proc.wait()
 
     except OSError as err:  # Git magically stopped existing. Or other OS errors, couldn't fork, etc.
-        log_func("Mystery OS error. OS says:\n=~=\n{0}\n=~=".format(err))
+        log_func("Mystery OS error. OS says:\n=~=\n{0}\n{1}\n=~=".format(sys.exc_info()[0], err))
     except Exception as err:
         # Idk, man. Computers are hard.
-        log_func("Mystery error! Exception says:\n=~=\n{0}\n=~=".format(err))
+        log_func("Mystery error! Exception says:\n=~=\n{0}\n{1}\n=~=".format(sys.exc_info()[0], err))
 
     return -999
 
@@ -273,11 +273,12 @@ def init_repository(params):
                     # This log mostly exists so we can add the directory hierarchy
                     # Git doesn't like empty folders
                     full_log = MultiLog('log_init', 'autocheckout/logs/init.log', 'a')
-                    if params['remote_url']:
+                    if params['remote']:
                         full_log("=== Preparing Remote ===")
-                        remote = params['remote_url']
+                        remote = params['remote']
                         full_log("=~= WARNING: Access to origin must be keyless =~=")
-                        run_command(['git', 'remote', 'add', 'origin', remote], "add remote 'origin' @ '{0}".format(remote),
+                        run_command(['git', 'remote', 'add', 'origin', remote],
+                                    "add remote 'origin' @ '{0}".format(remote),
                                     full_log)
 
                     full_log("=== Initialization Complete ===")
@@ -286,12 +287,15 @@ def init_repository(params):
 
                     if add_files(full_log):
                         if commit_files("Repository Initialization", full_log):
-                            tentative_sync(full_log)
+                            # WHOOPS. Don't pull if it doesn't exist...
+                            # tentative_sync(full_log)
+                            full_log("=== Pushing ===")
+                            run_command(['git', 'push', 'origin', 'master'], "push to origin", full_log)
 
                 except OSError as err:
                     print("Couldn't make directory structure, OS says: {0}".format(err))
                 except Exception as err:
-                    print("Mystery error! {0}".format(err))
+                    print("Mystery error! {0} {1}".format(sys.exc_info()[0], err))
 
     return
 
@@ -319,8 +323,8 @@ def parse_and_execute():
     collect_parser.set_defaults(action=collect_assignment)
 
     init_parser = subparse_master.add_parser('init', help="Create a new submission repo")
-    init_parser.add_argument('repo_root', help="Repository to create")
-    init_parser.add_argument('--remote_url', help="New remote to hook up to")
+    init_parser.add_argument('repo_root', type=str, help="Repository to create")
+    init_parser.add_argument('--remote', type=str, help="New remote to sync with")
     init_parser.set_defaults(action=init_repository)
 
     args = parser.parse_args()
@@ -332,7 +336,7 @@ def parse_and_execute():
         parser.print_help()
         parser.exit(1)
 
-    print(params)
+    # print(params)
 
     if params['action'] == init_repository or (verify_git_and_cwd(params) and check_and_sync()):
         params['action'](params)
