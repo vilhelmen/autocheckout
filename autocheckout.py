@@ -113,12 +113,12 @@ def tag_commit(tag_name, tag_message, log):
     return False
 
 
-def verify_git_and_cwd(params):
+def verify_git_and_cwd(path):
     try:
         # Does the dir exist?
-        os.chdir(params['repo_root'])
+        os.chdir(path)
         # Is it a repo?
-        return run_command(['git', 'rev-parse'], "verify repository", print)
+        return run_command(['git', 'rev-parse', '--is-inside-work-tree'], "verify repository", print, True)
     except OSError as err:
         print("Repo does not exist / permission denied / something broke: {0}".format(err))
     except Exception as err:
@@ -315,17 +315,53 @@ def init_repository(params):
 
 
 def deregister_students(params):
-    # I already forgot how to do this. Ugh.
-    # Something about deinit and then an rm?
-    # git submodule deinit NAME
+    # given a list of students, purge them from the system
+
+    # git submodule deinit --force NAME
     # git rm --cached NAME
+    # commit and push(?)
 
-    # Uhhh, really only supports one student at a time.
-    # Figured it wasn't an issue unless like half the class drops/dies
-    # I also can't (quickly) figure out how to toggle single/bulk
-    # Also, please don't use this to cycle the semester. Just toss it all and start over.
+    full_log = MultiLog("full_log", "autocheckout/logs/last_deregister.log", 'w')
 
-    print("Nooope")
+    full_log("=== Starting removal ===")
+
+    # Uhh, technically, subdir could be a path leading outside the repo, causing this to go insane
+    # So I guess for safety, instead of jumping into the subdir and working, we'll append everything :/
+
+    # can query list of submodules by moving into workspace directory and running
+    # git submodule status .
+    # and scanning the results for the names in the list.
+    # ... Or we can just blindly call git submodule deinit and just have it fail and yell at the user for us.
+    # That seems easier.
+
+    successfully_removed = []
+    failed_removed = []
+
+    for student in params['students']:
+        student_path = params['subdir'] + '/' + student
+        if run_command(['git', 'submodule', 'deinit', '--force', student_path], "deinit " + student_path,
+                       full_log) and run_command(['git', 'rm', '--cached', student_path], "delete " + student_path,
+                                                 full_log):
+            successfully_removed.append(student)
+        else:
+            failed_removed.append(student)
+
+    # Cool, done. Let's wrap it up.
+
+    full_log("=== Removal complete, removed {0}, {1} failed ===".format(len(successfully_removed), len(failed_removed)))
+
+    full_log.close_file()
+
+    if not successfully_removed:
+        successfully_removed = ["(none)"]
+    if not failed_removed:
+        failed_removed = ["(none)"]
+
+    if add_files(full_log):
+        if commit_files("Student deregister at " + time.ctime() + "\nRemoved:\n" + ",".join(successfully_removed) +
+                        "\nFailed:\n" + ",".join(failed_removed), full_log):
+            tentative_sync(full_log)
+
     return
 
 
@@ -358,7 +394,7 @@ def parse_and_execute():
     remove_parser.add_argument('students', type=str, nargs='+',
                                help="List of students to remove")
     remove_parser.add_argument('--subdir', type=str, default='workspaces',
-                                 help="Repository subdirectory")
+                               help="Repository subdirectory")
     remove_parser.set_defaults(action=deregister_students)
 
     args = parser.parse_args()
@@ -372,7 +408,7 @@ def parse_and_execute():
 
     # print(params)
 
-    if params['action'] == init_repository or (verify_git_and_cwd(params) and check_and_sync()):
+    if params['action'] == init_repository or (verify_git_and_cwd(params['repo_root']) and check_and_sync()):
         params['action'](params)
 
     return
