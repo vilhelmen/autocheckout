@@ -353,10 +353,10 @@ def parse_and_execute():
     init_parser.add_argument('--remote', type=str, help="New remote to sync with")
     init_parser.set_defaults(action=init_repository)
 
-    remove_parser = subparse_master.add_parser('deregister', help="Remove student")
+    remove_parser = subparse_master.add_parser('deregister', help="Remove students")
     remove_parser.add_argument('repo_root', type=str, help="Path to the submission repository")
     remove_parser.add_argument('students', type=str, nargs='+',
-                               help="List of student IDs to remove")
+                               help="List of students to remove")
     remove_parser.add_argument('--subdir', type=str, default='workspaces',
                                  help="Repository subdirectory")
     remove_parser.set_defaults(action=deregister_students)
