@@ -255,6 +255,20 @@ def collect_assignment(params):
 #     return
 
 
+def amend(params):
+    # https://printf2linux.wordpress.com/2012/04/09/insert-a-commit-in-the-past-git/
+    # checkout new branch (always same name, fail if it already exists?)
+    # git add <whatever>
+    # git commit
+    # git rebase BRANCH master
+    # Hope there aren't merge conflicts
+    # switch to master
+    # push
+    # kill temp branch
+    print("Noooope")
+    return
+
+
 def init_repository(params):
     # does repo_root exist? Create it. (but don't go crazy with directories)
     # is it under version control? Git init
@@ -300,18 +314,30 @@ def init_repository(params):
     return
 
 
-# def remove_students(params):
-#     print("Nooope")
-#     return
+def deregister_students(params):
+    # I already forgot how to do this. Ugh.
+    # Something about deinit and then an rm?
+    # git submodule deinit NAME
+    # git rm --cached NAME
+
+    # Uhhh, really only supports one student at a time.
+    # Figured it wasn't an issue unless like half the class drops/dies
+    # I also can't (quickly) figure out how to toggle single/bulk
+    # Also, please don't use this to cycle the semester. Just toss it all and start over.
+
+    print("Nooope")
+    return
+
 
 def parse_and_execute():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(fromfile_prefix_chars='@')
 
     subparse_master = parser.add_subparsers(title="Commands")
 
     register_parser = subparse_master.add_parser('register', help="Register students")
     register_parser.add_argument('repo_root', type=str, help="Path to the submission repository")
-    register_parser.add_argument('import_file', type=argparse.FileType('r'), help="Student list to register")
+    register_parser.add_argument('import_file', type=argparse.FileType('r'),
+                                 help="Student list to register (CSV: repo_url,student_id)")
     register_parser.add_argument('--subdir', type=str, default='workspaces',
                                  help="Subdirectory to place repositories into")
     register_parser.set_defaults(action=register_students)
@@ -326,6 +352,14 @@ def parse_and_execute():
     init_parser.add_argument('repo_root', type=str, help="Repository to create")
     init_parser.add_argument('--remote', type=str, help="New remote to sync with")
     init_parser.set_defaults(action=init_repository)
+
+    remove_parser = subparse_master.add_parser('deregister', help="Remove student")
+    remove_parser.add_argument('repo_root', type=str, help="Path to the submission repository")
+    remove_parser.add_argument('students', type=str, nargs='+',
+                               help="List of student IDs to remove")
+    remove_parser.add_argument('--subdir', type=str, default='workspaces',
+                                 help="Repository subdirectory")
+    remove_parser.set_defaults(action=deregister_students)
 
     args = parser.parse_args()
 
