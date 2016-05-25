@@ -276,7 +276,7 @@ def init_repository(params):
     print("=== Initializing Repository ===")
     if run_command(['git', 'init', params['repo_root']], "initialize git repository", print):
         # Cool. Make directories
-        if verify_git_and_cwd(params):
+        if verify_git_and_cwd(params['repo_root']):
             if os.path.exists('autocheckout'):
                 print("=~= ERROR: Autocheckout already initialized. Halting. =~=")
             else:
@@ -352,8 +352,15 @@ def deregister_students(params):
 
     full_log.close_file()
 
+    # TBH, committing when nothing succeeded is a little weird.
+    # I actually don't like that.
+    # But if we don't, the repo is left dirty (but just that log)
+    # If the user comes back and does it right, it's fine
+    # But if they don't, it's going to get a merge conflict if someone else does a removal
+
     if not successfully_removed:
         successfully_removed = ["(none)"]
+        
     if not failed_removed:
         failed_removed = ["(none)"]
 
